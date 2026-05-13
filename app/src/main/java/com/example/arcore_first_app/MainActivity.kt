@@ -7,6 +7,7 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -34,6 +35,18 @@ class MainActivity : ComponentActivity() {
     private var isArSupported by mutableStateOf(false)
     private var showArExperience by mutableStateOf(false)
 
+    private val requestPermissionLauncher =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (!isGranted) {
+                Toast.makeText(
+                    this,
+                    "Camera permission is needed to run this application",
+                    Toast.LENGTH_LONG
+                ).show()
+                finish()
+            }
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -50,7 +63,11 @@ class MainActivity : ComponentActivity() {
                         )
                     } else {
                         // Show the standard Landing UI
-                        Column(modifier = Modifier.padding(innerPadding).padding(16.dp)) {
+                        Column(
+                            modifier = Modifier
+                                .padding(innerPadding)
+                                .padding(16.dp)
+                        ) {
                             Greeting(name = "AR User")
                             if (isArSupported) {
                                 Button(onClick = { showArExperience = true }) {
@@ -69,7 +86,7 @@ class MainActivity : ComponentActivity() {
 
         // ARCore requires camera permission to operate.
         if (!hasCameraPermission()) {
-            requestCameraPermission()
+            requestPermissionLauncher.launch(Manifest.permission.CAMERA)
             return
         }
 
@@ -115,40 +132,19 @@ class MainActivity : ComponentActivity() {
         this, Manifest.permission.CAMERA
     ) == PackageManager.PERMISSION_GRANTED
 
-    private fun requestCameraPermission() {
-        ActivityCompat.requestPermissions(
-            this, arrayOf(Manifest.permission.CAMERA), 0
+    @Composable
+    fun Greeting(name: String, modifier: Modifier = Modifier) {
+        Text(
+            text = "Hello $name!",
+            modifier = modifier
         )
     }
 
-    @Deprecated("Deprecated in Java")
-    override fun onRequestPermissionsResult(
-        requestCode: Int,
-        permissions: Array<String>,
-        results: IntArray
-    ) {
-        @Suppress("DEPRECATION")
-        super.onRequestPermissionsResult(requestCode, permissions, results)
-        if (!hasCameraPermission()) {
-            Toast.makeText(this, "Camera permission is needed to run this application", Toast.LENGTH_LONG).show()
-            finish() // Close app if permission is denied
-            }
+    @Preview(showBackground = true)
+    @Composable
+    fun GreetingPreview() {
+        ArcorefirstappTheme {
+            Greeting("Android")
         }
-    }
-
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-    Text(
-        text = "Hello $name!",
-        modifier = modifier
-    )
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-    ArcorefirstappTheme {
-        Greeting("Android")
     }
 }

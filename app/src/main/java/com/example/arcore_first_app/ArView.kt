@@ -39,11 +39,7 @@ fun ArView(
             }
 
             override fun onPause(owner: LifecycleOwner) {
-                try {
-                    session?.pause()
-                } catch (e: Exception) {
-                    // Log error or handle failure
-                }
+                session?.pause()
             }
         }
 
