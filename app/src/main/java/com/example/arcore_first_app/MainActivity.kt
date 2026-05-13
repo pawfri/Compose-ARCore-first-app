@@ -21,12 +21,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.example.arcore_first_app.ui.theme.ArcorefirstappTheme
 import com.google.ar.core.ArCoreApk
 import com.google.ar.core.Session
 import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException
+import com.google.ar.core.Config
 
 class MainActivity : ComponentActivity() {
     // ARCore state
@@ -95,8 +95,15 @@ class MainActivity : ComponentActivity() {
             if (mSession == null) {
                 when (ArCoreApk.getInstance().requestInstall(this, mUserRequestedInstall)) {
                     ArCoreApk.InstallStatus.INSTALLED -> {
-                        // Success: Safe to create the AR session.
-                        mSession = Session(this)
+                        // Success: Create the AR session.
+                        val session = Session(this)
+                        val config = Config(session)
+
+                        // Feature-specific operations
+                        config.focusMode = Config.FocusMode.AUTO
+
+                        session.configure(config)
+                        mSession = session
                     }
                     ArCoreApk.InstallStatus.INSTALL_REQUESTED -> {
                         mUserRequestedInstall = false
