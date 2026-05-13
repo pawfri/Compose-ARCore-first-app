@@ -16,15 +16,21 @@ fun ArView(
 ) {
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
 
+    val renderer = remember { ArRenderer(session) }
+
     // Use AndroidView to embed a standard GLSurfaceView for AR rendering
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
             GLSurfaceView(ctx).apply {
-                // TODO: set up render here
+                setEGLContextClientVersion(2)
+                setRenderer(renderer)
+                renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
             }
         },
-        update = { /* Update if needed */ }
+        update = {
+            // Ensure the renderer always has the current session
+            renderer.session = session }
     )
 
     // Handle Lifecycle for the AR Session
