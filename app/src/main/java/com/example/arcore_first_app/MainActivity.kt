@@ -29,9 +29,10 @@ import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationExceptio
 
 class MainActivity : ComponentActivity() {
     // ARCore state
-    private var mSession: Session? = null
+    private var mSession by mutableStateOf<Session?>(null)
     private var mUserRequestedInstall = true
     private var isArSupported by mutableStateOf(false)
+    private var showArExperience by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -41,30 +42,27 @@ class MainActivity : ComponentActivity() {
         setContent {
             ArcorefirstappTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Column(modifier = Modifier
-                        .padding(innerPadding)
-                        .padding(16.dp)) {
-                    Greeting(name = "AR User")
-
-                    // Use the state to conditionally show the AR button
-                    if (isArSupported) {
-                        Button(
-                            onClick = { /* Start AR activity/view here */ },
-                            modifier = Modifier.padding(top = 16.dp)
-                        ) {
-                            Text("Enter AR Experience")
-                        }
-                    } else {
-                        Text(
-                            "AR is not supported on this device",
-                            modifier = Modifier.padding(top = 16.dp)
+                    if (showArExperience) {
+                        // Show the dedicated AR View
+                        ArView(
+                            modifier = Modifier.fillMaxSize(),
+                            session = mSession
                         )
+                    } else {
+                        // Show the standard Landing UI
+                        Column(modifier = Modifier.padding(innerPadding).padding(16.dp)) {
+                            Greeting(name = "AR User")
+                            if (isArSupported) {
+                                Button(onClick = { showArExperience = true }) {
+                                    Text("Enter AR Experience")
+                                }
+                            }
+                        }
                     }
                 }
             }
         }
     }
-}
 
     override fun onResume() {
         super.onResume()
@@ -129,16 +127,15 @@ class MainActivity : ComponentActivity() {
         permissions: Array<String>,
         results: IntArray
     ) {
+        @Suppress("DEPRECATION")
         super.onRequestPermissionsResult(requestCode, permissions, results)
         if (!hasCameraPermission()) {
             Toast.makeText(this, "Camera permission is needed to run this application", Toast.LENGTH_LONG).show()
-            if (!ActivityCompat.shouldShowRequestPermissionRationale(this, Manifest.permission.CAMERA)) {
-                // Permission denied with "Do not ask again".
+            finish() // Close app if permission is denied
             }
-            finish()
         }
     }
-}
+
 
 @Composable
 fun Greeting(name: String, modifier: Modifier = Modifier) {
