@@ -7,6 +7,7 @@ import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import com.google.ar.core.Session
 import android.opengl.GLSurfaceView
+import com.example.arcore_first_app.java.samplerender.SampleRender
 
 
 @Composable
@@ -15,7 +16,6 @@ fun ArView(
     session: Session?
 ) {
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
-
     val renderer = remember { ArRenderer(session) }
 
     // Use AndroidView to embed a standard GLSurfaceView for AR rendering
@@ -23,9 +23,7 @@ fun ArView(
         modifier = modifier,
         factory = { ctx ->
             GLSurfaceView(ctx).apply {
-                setEGLContextClientVersion(2)
-                setRenderer(renderer)
-                renderMode = GLSurfaceView.RENDERMODE_CONTINUOUSLY
+                SampleRender(this, renderer, ctx.assets)
             }
         },
         update = {
