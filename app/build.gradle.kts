@@ -60,4 +60,5 @@ dependencies {
     // ARCore library
     implementation("com.google.ar:core:1.54.0")
     implementation("de.javagl:obj:0.4.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
 }
