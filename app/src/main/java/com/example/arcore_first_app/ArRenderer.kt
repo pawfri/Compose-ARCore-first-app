@@ -10,10 +10,23 @@ import com.example.arcore_first_app.java.samplerender.Mesh
 import com.example.arcore_first_app.java.samplerender.Shader
 import com.example.arcore_first_app.java.samplerender.Texture
 import com.google.ar.core.Anchor
+import com.google.ar.core.Camera
 import com.google.ar.core.Frame
-import com.google.ar.core.Plane
+import com.google.ar.core.InstantPlacementPoint
+import com.google.ar.core.Pose
 import com.google.ar.core.Session
+import com.google.ar.core.Trackable
 import com.google.ar.core.TrackingState
+import kotlin.math.pow
+import kotlin.math.sqrt
+
+data class WrappedAnchor(
+    val anchor: Anchor,
+    val trackable: Trackable,
+    var previousTrackingMethod: InstantPlacementPoint.TrackingMethod,
+    var previousDistanceToCamera: Float,
+    var scaleFactor: Float = 1.0f
+)
 
 class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : SampleRender.Renderer {
     private lateinit var backgroundRenderer: BackgroundRenderer
@@ -24,13 +37,13 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
     private lateinit var virtualObjectAlbedoTexture: Texture
 
     // List to keep track of placed objects
-    private val anchors = mutableListOf<Anchor>()
+//    private val anchors = mutableListOf<Anchor>()
+    private val anchors = mutableListOf<WrappedAnchor>()
 
     // Matrices for 3D math
     private val modelMatrix = FloatArray(16)
     private val viewMatrix = FloatArray(16)
     private val projectionMatrix = FloatArray(16)
-    private val modelViewMatrix = FloatArray(16)
     private val modelViewProjectionMatrix = FloatArray(16)
 
     private var isTextureSet = false
@@ -96,10 +109,10 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
         backgroundRenderer.drawBackground(render)
 
         // 2. Handle Taps
-        handleTap(frame)
+        val camera = frame.camera
+        handleTap(frame, camera)
 
         // 3. Get Camera Matrices
-        val camera = frame.camera
         if (camera.trackingState != TrackingState.TRACKING) return
         camera.getProjectionMatrix(projectionMatrix, 0, 0.1f, 100.0f)
         camera.getViewMatrix(viewMatrix, 0)
@@ -108,40 +121,74 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
         // Safety check: Don't draw if the assets failed to load
         if (!::virtualObjectShader.isInitialized || !::virtualObjectMesh.isInitialized) return
 
-        for (anchor in anchors) {
+        val iter = anchors.iterator()
+        while (iter.hasNext()) {
+            val wrapped = iter.next()
+            val anchor = wrapped.anchor
+
+            if (anchor.trackingState == TrackingState.STOPPED) {
+                iter.remove()
+                continue
+            }
             if (anchor.trackingState != TrackingState.TRACKING) continue
 
-            // Get position
+            // SMOOTHING LOGIC: Check if tracking method changed from Approximate to Full
+            if (wrapped.trackable is InstantPlacementPoint) {
+                val point = wrapped.trackable
+                val currentDistance = anchor.pose.distance(camera.pose)
+
+                if (point.trackingMethod ==
+                    InstantPlacementPoint.TrackingMethod.SCREENSPACE_WITH_APPROXIMATE_DISTANCE) {
+                    wrapped.previousDistanceToCamera = currentDistance
+                } else if (wrapped.previousTrackingMethod ==
+                    InstantPlacementPoint.TrackingMethod.SCREENSPACE_WITH_APPROXIMATE_DISTANCE
+                    && point.trackingMethod == InstantPlacementPoint.TrackingMethod.FULL_TRACKING) {
+                    // Calculate a scale factor to keep the object appearing the same size during the "jump"
+                    wrapped.scaleFactor = currentDistance / wrapped.previousDistanceToCamera
+                    wrapped.previousTrackingMethod = InstantPlacementPoint.TrackingMethod.FULL_TRACKING
+                }
+            }
+
             anchor.pose.toMatrix(modelMatrix, 0)
+            // Apply smoothing scale
+            Matrix.scaleM(modelMatrix, 0, wrapped.scaleFactor, wrapped.scaleFactor, wrapped.scaleFactor)
 
-            // Math
-            Matrix.multiplyMM(modelViewMatrix, 0, viewMatrix, 0, modelMatrix, 0)
-            Matrix.multiplyMM(modelViewProjectionMatrix, 0, projectionMatrix, 0, modelViewMatrix, 0)
+            Matrix.multiplyMM(modelViewProjectionMatrix, 0, projectionMatrix, 0, viewMatrix, 0)
+            Matrix.multiplyMM(modelViewProjectionMatrix, 0, modelViewProjectionMatrix, 0, modelMatrix, 0)
 
-            // Send matrices to the shader and draw
             virtualObjectShader.setMat4("u_ModelViewProjection", modelViewProjectionMatrix)
             render.draw(virtualObjectMesh, virtualObjectShader)
         }
     }
 
-    private fun handleTap(frame: Frame) {
+    private fun handleTap(frame: Frame, camera: Camera) {
         val tap = tapHelper.poll() ?: return
-        val hitResultList = frame.hitTest(tap)
 
-        // Find the first hit that is on a plane (floor/table)
-        val firstHit = hitResultList.firstOrNull { hit ->
-            val trackable = hit.trackable
-            trackable is Plane && trackable.isPoseInPolygon(hit.hitPose)
+        // 4. Try standard Plane hit test first
+        var hitResultList = frame.hitTest(tap)
+
+        // 5. If no real floor found, use Instant Placement
+        if (hitResultList.isEmpty()) {
+            hitResultList = frame.hitTestInstantPlacement(tap.x, tap.y, 2.0f)
         }
 
-        if (firstHit != null) {
-            // Keep maximum 10 anchors to save memory
-            if (anchors.size >= 10) {
-                anchors[0].detach()
-                anchors.removeAt(0)
-            }
-            // Create a permanent location in the real world
-            anchors.add(firstHit.createAnchor())
+        val firstHit = hitResultList.firstOrNull() ?: return
+        val trackable = firstHit.trackable
+
+        if (anchors.size >= 10) {
+            anchors[0].anchor.detach()
+            anchors.removeAt(0)
         }
+
+        val anchor = firstHit.createAnchor()
+        val method = if (trackable is InstantPlacementPoint) trackable.trackingMethod
+        else InstantPlacementPoint.TrackingMethod.FULL_TRACKING
+
+        anchors.add(WrappedAnchor(anchor, trackable, method, anchor.pose.distance(camera.pose)))
+    }
+
+    // Helper to calculate distance between two 3D positions
+    private fun Pose.distance(other: Pose): Float {
+        return sqrt((tx()-other.tx()).pow(2) + (ty()-other.ty()).pow(2) + (tz()-other.tz()).pow(2))
     }
 }

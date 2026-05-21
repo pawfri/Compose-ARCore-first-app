@@ -101,6 +101,7 @@ class MainActivity : ComponentActivity() {
 
                         // Feature-specific operations
                         config.focusMode = Config.FocusMode.AUTO
+                        config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP
 
                         session.configure(config)
                         mSession = session
