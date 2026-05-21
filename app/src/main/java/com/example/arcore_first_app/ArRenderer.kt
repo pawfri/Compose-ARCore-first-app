@@ -37,7 +37,6 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
     private lateinit var virtualObjectAlbedoTexture: Texture
 
     // List to keep track of placed objects
-//    private val anchors = mutableListOf<Anchor>()
     private val anchors = mutableListOf<WrappedAnchor>()
 
     // Matrices for 3D math
@@ -96,7 +95,7 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
     override fun onDrawFrame(render: SampleRender) {
         val session = session ?: return
 
-        // 1. Ensure camera texture is linked (fixes black screen/sync issues)
+        // Ensure camera texture is linked (fixes black screen/sync issues)
         if (!isTextureSet) {
             val textureId = backgroundRenderer.cameraColorTexture.getTextureId()
             session.setCameraTextureNames(intArrayOf(textureId))
@@ -108,16 +107,16 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
         backgroundRenderer.updateDisplayGeometry(frame)
         backgroundRenderer.drawBackground(render)
 
-        // 2. Handle Taps
+        // Handle Taps
         val camera = frame.camera
         handleTap(frame, camera)
 
-        // 3. Get Camera Matrices
+        // Get Camera Matrices
         if (camera.trackingState != TrackingState.TRACKING) return
         camera.getProjectionMatrix(projectionMatrix, 0, 0.1f, 100.0f)
         camera.getViewMatrix(viewMatrix, 0)
 
-        // 4. Draw placed objects
+        // Draw placed objects
         // Safety check: Don't draw if the assets failed to load
         if (!::virtualObjectShader.isInitialized || !::virtualObjectMesh.isInitialized) return
 
@@ -164,10 +163,10 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
     private fun handleTap(frame: Frame, camera: Camera) {
         val tap = tapHelper.poll() ?: return
 
-        // 4. Try standard Plane hit test first
+        // Try standard Plane hit test first
         var hitResultList = frame.hitTest(tap)
 
-        // 5. If no real floor found, use Instant Placement
+        // If no real floor found, use Instant Placement
         if (hitResultList.isEmpty()) {
             hitResultList = frame.hitTestInstantPlacement(tap.x, tap.y, 2.0f)
         }
