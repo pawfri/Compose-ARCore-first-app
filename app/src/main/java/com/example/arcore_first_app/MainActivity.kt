@@ -103,6 +103,12 @@ class MainActivity : ComponentActivity() {
                         config.focusMode = Config.FocusMode.AUTO
                         config.instantPlacementMode = Config.InstantPlacementMode.LOCAL_Y_UP
 
+                        // Check whether the user's device supports the Depth API.
+                        val isDepthSupported = session.isDepthModeSupported(Config.DepthMode.AUTOMATIC)
+                        if (isDepthSupported) {
+                            config.depthMode = Config.DepthMode.AUTOMATIC
+                        }
+
                         session.configure(config)
                         mSession = session
                     }

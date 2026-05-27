@@ -9,6 +9,8 @@
     <uses-feature android:name="android.hardware.camera.ar" />
     <!-- Tag related to CAMERA. Google Play assume hardware related permissions are required by default -->
     <uses-feature android:name="android.hardware.camera" android:required="true" />
+    <!-- Restricted to Depth-supported devices -->
+    <uses-feature android:name="com.google.ar.core.depth" />
 
     <application
         android:allowBackup="true"

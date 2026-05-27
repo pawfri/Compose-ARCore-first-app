@@ -4,6 +4,7 @@ import android.opengl.GLES30
 import android.opengl.Matrix
 import android.util.Log
 import com.example.arcore_first_app.java.helpers.TapHelper
+import com.example.arcore_first_app.java.samplerender.Framebuffer
 import com.example.arcore_first_app.java.samplerender.SampleRender
 import com.example.arcore_first_app.java.samplerender.arcore.BackgroundRenderer
 import com.example.arcore_first_app.java.samplerender.Mesh
@@ -11,12 +12,15 @@ import com.example.arcore_first_app.java.samplerender.Shader
 import com.example.arcore_first_app.java.samplerender.Texture
 import com.google.ar.core.Anchor
 import com.google.ar.core.Camera
+import com.google.ar.core.DepthPoint
 import com.google.ar.core.Frame
 import com.google.ar.core.InstantPlacementPoint
+import com.google.ar.core.Plane
 import com.google.ar.core.Pose
 import com.google.ar.core.Session
 import com.google.ar.core.Trackable
 import com.google.ar.core.TrackingState
+import com.google.ar.core.exceptions.NotYetAvailableException
 import kotlin.math.pow
 import kotlin.math.sqrt
 
@@ -44,6 +48,9 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
     private val viewMatrix = FloatArray(16)
     private val projectionMatrix = FloatArray(16)
     private val modelViewProjectionMatrix = FloatArray(16)
+
+    // Variable to handle Framebuffer
+    private lateinit var virtualSceneFramebuffer: Framebuffer
 
     private var isTextureSet = false
 
@@ -84,12 +91,15 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
         } catch (e: Exception) {
             Log.e("ArRenderer", "Failed to load 3D assets: ${e.message}", e)
         }
+
+        virtualSceneFramebuffer = Framebuffer(render, 1, 1)
     }
 
     override fun onSurfaceChanged(render: SampleRender, width: Int, height: Int) {
         GLES30.glViewport(0, 0, width, height)
         // Update ARCore so it knows how to scale the camera feed to the screen size
         session?.setDisplayGeometry(0, width, height)
+        virtualSceneFramebuffer.resize(width, height)
     }
 
     override fun onDrawFrame(render: SampleRender) {
@@ -104,6 +114,18 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
 
         val frame = try { session.update() } catch (e: Exception) { return }
 
+        // Retrieve depth image for current frame if available
+        try {
+            frame.acquireDepthImage16Bits().use { depthImage ->
+                // Feed it to the background renderer
+                backgroundRenderer.updateCameraDepthTexture(depthImage)
+                // Add occlusion (virtual objects can appear behind real objects)
+                backgroundRenderer.setUseOcclusion(render, true)
+            }
+        } catch (e: NotYetAvailableException) {
+            // This means that depth data is not available yet.
+        }
+
         backgroundRenderer.updateDisplayGeometry(frame)
         backgroundRenderer.drawBackground(render)
 
@@ -113,12 +135,18 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
 
         // Get Camera Matrices
         if (camera.trackingState != TrackingState.TRACKING) return
-        camera.getProjectionMatrix(projectionMatrix, 0, 0.1f, 100.0f)
+
+        val zNear = 0.1f
+        val zFar = 100.0f
+        camera.getProjectionMatrix(projectionMatrix, 0, zNear, zFar)
         camera.getViewMatrix(viewMatrix, 0)
 
         // Draw placed objects
-        // Safety check: Don't draw if the assets failed to load
+        // Don't draw if the assets failed to load
         if (!::virtualObjectShader.isInitialized || !::virtualObjectMesh.isInitialized) return
+
+        // Clear framebuffer
+        render.clear(virtualSceneFramebuffer, 0f, 0f, 0f, 0f)
 
         val iter = anchors.iterator()
         while (iter.hasNext()) {
@@ -156,8 +184,9 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
             Matrix.multiplyMM(modelViewProjectionMatrix, 0, modelViewProjectionMatrix, 0, modelMatrix, 0)
 
             virtualObjectShader.setMat4("u_ModelViewProjection", modelViewProjectionMatrix)
-            render.draw(virtualObjectMesh, virtualObjectShader)
+            render.draw(virtualObjectMesh, virtualObjectShader, virtualSceneFramebuffer)
         }
+        backgroundRenderer.drawVirtualScene(render, virtualSceneFramebuffer, zNear, zFar)
     }
 
     private fun handleTap(frame: Frame, camera: Camera) {
@@ -171,7 +200,12 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
             hitResultList = frame.hitTestInstantPlacement(tap.x, tap.y, 2.0f)
         }
 
-        val firstHit = hitResultList.firstOrNull() ?: return
+        val firstHit = hitResultList.firstOrNull { hit ->
+            val trackable = hit.trackable
+            (trackable is Plane && trackable.isPoseInPolygon(hit.hitPose)) ||
+                    trackable is DepthPoint
+        } ?: return
+
         val trackable = firstHit.trackable
 
         if (anchors.size >= 10) {
