@@ -203,7 +203,8 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
         val firstHit = hitResultList.firstOrNull { hit ->
             val trackable = hit.trackable
             (trackable is Plane && trackable.isPoseInPolygon(hit.hitPose)) ||
-                    trackable is DepthPoint
+                    trackable is DepthPoint ||
+                    trackable is InstantPlacementPoint
         } ?: return
 
         val trackable = firstHit.trackable
