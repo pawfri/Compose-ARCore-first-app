@@ -195,9 +195,9 @@ class ArRenderer(var session: Session?, private val tapHelper: TapHelper) : Samp
         // Try standard Plane hit test first
         var hitResultList = frame.hitTest(tap)
 
-        // If no real floor found, use Instant Placement
-        if (hitResultList.isEmpty()) {
-            hitResultList = frame.hitTestInstantPlacement(tap.x, tap.y, 2.0f)
+        // If no Planes or DepthPoints, use Instant Placement
+        if (hitResultList.none {it.trackable is Plane || it.trackable is DepthPoint}) {
+            hitResultList = frame.hitTestInstantPlacement(tap.x, tap.y, 1.0f)
         }
 
         val firstHit = hitResultList.firstOrNull { hit ->
